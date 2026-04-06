@@ -1,5 +1,6 @@
 import re
 
+from src.blocktype import BlockType
 from src.leafnode import LeafNode
 from src.textnode import TextNode, TextType
 
@@ -158,3 +159,57 @@ def text_to_textnodes(text):
             )
         )
     )
+
+
+# Takes raw Markdown string and returns list of "block" strings.
+def markdown_to_blocks(markdown):
+    blocks = []
+    md_blocks = markdown.split("\n\n")
+    for md_block in md_blocks:
+        if md_block:
+            blocks.append(md_block.strip())
+    return blocks
+
+
+# inspect block (str) of markdown text and return correct BlockType
+def block_to_blocktype(block):
+    # simple cases
+    if re.match(r"[#]{1,6} ", block):
+        return BlockType.HEADING
+    if block.startswith("```\n") and block.endswith("```"):
+        return BlockType.CODE
+    # multi-line cases
+    lines = block.split("\n")
+    quote_block = False
+    unordered_list = False
+    ordered_list = False
+    if lines[0].startswith(">"):
+        quote_block = True
+        for line in lines:
+            if not line.startswith(">"):
+                quote_block = False
+                break
+    if lines[0].startswith("- "):
+        unordered_list = True
+        for line in lines:
+            if not line.startswith("- "):
+                unordered_list = False
+                break
+    if lines[0].startswith("1. "):
+        ordered_list = True
+        for i in range(len(lines)):
+            if not lines[i].startswith(f"{i + 1}. "):
+                ordered_list = False
+    if quote_block:
+        return BlockType.QUOTE
+    elif unordered_list:
+        return BlockType.UNORDERED_LIST
+    elif ordered_list:
+        return BlockType.ORDERED_LIST
+    else:
+        return BlockType.PARAGRAPH
+
+
+def markdown_to_html_node(markdown):
+    md_blocks = markdown_to_blocks(markdown)
+    pass
