@@ -1,9 +1,11 @@
+import os
 import re
+import shutil
 
-from src.blocktype import BlockType
-from src.leafnode import LeafNode
-from src.parentnode import ParentNode
-from src.textnode import TextNode, TextType
+from blocktype import BlockType
+from leafnode import LeafNode
+from parentnode import ParentNode
+from textnode import TextNode, TextType
 
 
 # Takes a Markdown TextNode and returns an HTML LeafNode
@@ -217,12 +219,13 @@ def text_to_children(block_text):
     text_nodes = text_to_textnodes(block_text)
     for text_node in text_nodes:
         html_nodes.append(text_node_to_html_node(text_node))
-    if len(html_nodes) > 1:
+    if len(html_nodes):
         return html_nodes
     else:
         return []
 
 
+# fetch list list child items for un/ordered lists
 def get_list_item_html_nodes(list_text):
     line_html_nodes = []
     lines = list_text.split("\n")
@@ -237,6 +240,7 @@ def get_list_item_html_nodes(list_text):
     return line_html_nodes
 
 
+# handles the parent/child logic of all expected BlockTypes
 def create_block_node(block_text, block_type):
     if block_type == BlockType.CODE:
         split_block = block_text.split("\n")
@@ -283,6 +287,7 @@ def create_block_node(block_text, block_type):
             raise Exception("Bad BlockType")
 
 
+# takes markdown string and returns fully assebled html node
 def markdown_to_html_node(markdown):
     block_html_nodes = []
     md_blocks = markdown_to_blocks(markdown)
@@ -292,3 +297,53 @@ def markdown_to_html_node(markdown):
             create_block_node(md_blocks[i], block_to_blocktype(md_blocks[i]))
         )
     return ParentNode("div", block_html_nodes)
+
+
+# get the title from mardown string
+def extract_title(markdown):
+    lines = markdown.split("\n")
+    for line in lines:
+        if line.startswith("# "):
+            return line[2:]
+    raise Exception("No Header Found")
+
+
+# send source materials to generated destination
+def copy_dir_contents(source_path, dest_path):
+    if os.path.exists(dest_path):
+        shutil.rmtree(dest_path)
+    os.mkdir(dest_path)
+    dir_contents = os.listdir(source_path)
+    copied_files = []
+    for content in dir_contents:
+        content_path = os.path.join(source_path, content)
+        if os.path.isfile(content_path):
+            copied_files.append(shutil.copy(content_path, dest_path))
+        else:
+            new_dest = os.path.join(dest_path, content)
+            copy_dir_contents(content_path, new_dest)
+
+
+# make the new index.html from source documents
+def generate_page(from_path, template_path, dest_path):
+    print(f"Generating page from {from_path} to {dest_path} using {template_path}...")
+    from_abs_path = os.path.abspath(from_path)
+    template_abs_path = os.path.abspath(template_path)
+    dest_abs_path = os.path.abspath(dest_path)
+    # retrieve markdown and template from filepaths
+    md = ""
+    with open(from_abs_path) as f:
+        md = f.read()
+    template = ""
+    with open(template_abs_path) as f:
+        template = f.read()
+    # turn markdown into html string and insert title/html into template
+    html_content = markdown_to_html_node(md).to_html()
+    title = extract_title(md)
+    template = template.replace("{{ Title }}", title).replace(
+        "{{ Content }}", html_content
+    )
+    os.makedirs(os.path.dirname(dest_abs_path), exist_ok=True)
+    target_filepath = os.path.join(dest_abs_path)
+    with open(target_filepath, "w") as f:
+        f.write(template)
